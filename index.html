@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#111318">
+<title>TaxiBudget Pro Québec</title>
+<style>
+:root{--bg:#0e1014;--card:#181b22;--card2:#20242c;--text:#f4f5f7;--muted:#9da4b0;--green:#49d17d;--red:#ff5c68;--orange:#ffb648;--blue:#55a9ff;--border:#2c313b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.wrap{max-width:720px;margin:auto;padding:18px 14px 90px}.head{padding:8px 4px 16px}.head h1{margin:0;font-size:27px}.head p{margin:5px 0;color:var(--muted)}
+nav{position:sticky;top:0;z-index:5;background:rgba(14,16,20,.94);backdrop-filter:blur(12px);display:flex;gap:7px;overflow:auto;padding:7px 0 10px}
+nav button{white-space:nowrap;border:1px solid var(--border);background:var(--card);color:var(--text);padding:10px 13px;border-radius:12px;font-weight:600}
+nav button.active{background:var(--green);color:#08130d;border-color:var(--green)}
+.section{display:none}.section.active{display:block}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:17px;padding:14px;margin:10px 0}.stat{min-height:95px}.stat .label{font-size:12px;color:var(--muted)}.stat .value{font-size:22px;font-weight:800;margin-top:7px}
+h2{font-size:19px;margin:20px 2px 10px}h3{margin:0 0 10px}
+label{display:block;font-size:12px;color:var(--muted);margin:10px 0 5px}input,select,textarea{width:100%;background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:11px;padding:12px;font-size:15px}textarea{min-height:70px}
+input:disabled{opacity:.6}
+button.primary,button.danger,button.secondary{border:0;border-radius:11px;padding:12px 14px;font-weight:700;margin-top:10px}button.primary{background:var(--green);color:#07120b}button.secondary{background:var(--card2);color:var(--text);border:1px solid var(--border)}button.danger{background:#3a1d21;color:#ff9aa1;border:1px solid #663038}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}.money{font-variant-numeric:tabular-nums}.item{background:var(--card2);border-radius:13px;padding:12px;margin:8px 0;border:1px solid var(--border)}.itemtop{display:flex;justify-content:space-between;gap:10px}.pill{font-size:11px;padding:4px 7px;border-radius:20px;background:#2b303a;color:#cbd0d8}.green{color:var(--green)}.red{color:var(--red)}.orange{color:var(--orange)}.blue{color:var(--blue)}.small{font-size:12px;color:var(--muted)}.empty{color:var(--muted);text-align:center;padding:22px}
+canvas{width:100%;height:220px;background:var(--card2);border-radius:14px}
+hr{border:0;border-top:1px solid var(--border);margin:14px 0}
+.progress{height:8px;background:var(--card2);border-radius:6px;overflow:hidden;margin:6px 0}
+.progress>div{height:100%;background:var(--green);transition:width .3s}
+@media(max-width:500px){.grid3{grid-template-columns:1fr 1fr}.head h1{font-size:24px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="head"><h1>🚕 TaxiBudget Pro Québec</h1><p>Suivi de l’achat, des dettes et des dépenses du taxi</p></header>
+<nav>
+<button class="active" data-tab="dash">Tableau</button>
+<button data-tab="add">+ Dépense</button>
+<button data-tab="bills">Factures</button>
+<button data-tab="debts">Financement</button>
+<button data-tab="history">Historique</button>
+<button data-tab="settings">Données</button>
+</nav>
+
+<section id="dash" class="section active">
+<div class="grid">
+<div class="card stat"><div class="label">Dépenses ce mois</div><div id="mMonth" class="value">$0.00</div></div>
+<div class="card stat"><div class="label">Dépenses totales</div><div id="mAll" class="value">$0.00</div></div>
+<div class="card stat"><div class="label">Dette totale</div><div id="mDebt" class="value red">$0.00</div></div>
+<div class="card stat"><div class="label">Intérêts / mois</div><div id="mInterest" class="value orange">$0.00</div></div>
+<div class="card stat"><div class="label">Factures / mois</div><div id="mBills" class="value blue">$0.00</div></div>
+<div class="card stat"><div class="label">Auto (paiement)</div><div id="mCarPay" class="value">$0.00</div></div>
+</div>
+<div class="card">
+<h3>Répartition des dépenses</h3><canvas id="chart" width="680" height="220"></canvas>
+</div>
+<div class="card"><h3>Dernières dépenses</h3><div id="recent"></div></div>
+</section>
+
+<section id="add" class="section">
+<h2>Ajouter une dépense</h2>
+<div class="card">
+<label>Date</label><input id="dDate" type="date">
+<label>Catégorie</label><select id="dCat"></select>
+<label>Montant ($)</label><input id="dAmount" type="number" step="0.01" inputmode="decimal" placeholder="0.00">
+<label>Mode de paiement</label><select id="dPay">
+<option value="credit0">Crédit 0 %</option>
+<option value="loc">Marge de crédit — 8,94 %</option>
+<option value="visa">Carte Visa</option>
+<option value="cheque">Compte chèque</option>
+<option value="cash">Comptant</option>
+</select>
+<label>Description</label><input id="dDesc" placeholder="Ex. chargeur, essence, réparation...">
+<button class="primary" style="width:100%" onclick="addExpense()">Ajouter la dépense</button>
+</div>
+<h2>Catégories rapides</h2>
+<div id="quickCats" class="grid"></div>
+</section>
+
+<section id="bills" class="section">
+<h2>Factures mensuelles récurrentes</h2>
+<p class="small" style="margin:0 4px 8px">Assurance, téléphone, internet, GPS, location... Ces montants sont additionnés à ton budget mensuel.</p>
+<div class="card">
+<label>Nom de la facture</label>
+<input id="billName" placeholder="Ex. Assurance taxi, Téléphone, Internet...">
+<label>Montant mensuel ($)</label>
+<input id="billAmount" type="number" step="0.01" inputmode="decimal" placeholder="0.00">
+<label>Catégorie</label>
+<select id="billCat"></select>
+<button class="primary" style="width:100%" onclick="addBill()">Ajouter la facture</button>
+</div>
+<h2>Mes factures</h2>
+<div id="billList"></div>
+<div id="billTotal"></div>
+</section>
+
+<section id="debts" class="section">
+<h2>Financement de l'auto</h2>
+<div class="card">
+<h3>🚕 Détails de l'achat</h3>
+<div class="grid">
+<div><label>Prix avant taxes</label><input id="carPrice" type="number" step=".01" inputmode="decimal"></div>
+<div><label>Taxes</label><input id="carTax" type="number" step=".01" inputmode="decimal"></div>
+<div><label>Acompte</label><input id="carDown" type="number" step=".01" inputmode="decimal"></div>
+<div><label>Solde financé</label><input id="carFin" type="number" step=".01" inputmode="decimal"></div>
+<div><label>Taux annuel (%)</label><input id="carRate" type="number" step=".01" inputmode="decimal" value="6.99"></div>
+<div><label>Fréquence</label><select id="carFreq">
+<option value="26">Aux 2 semaines (26/an)</option>
+<option value="24">2× par mois (24/an)</option>
+</select></div>
+</div>
+<label>Terme</label><input value="84 mois (7 ans)" disabled>
+<label>Note</label><input id="carNote" placeholder="Ex. Toyota Venza 2022">
+<button class="primary" style="width:100%" onclick="saveCar()">Enregistrer le financement</button>
+</div>
+
+<div class="card">
+<h3>📊 Résumé du financement</h3>
+<div id="carSummary"></div>
+<label>Date du paiement</label><input id="carPaymentDate" type="date">
+<button class="primary" style="width:100%" onclick="recordCarPayment()">💸 Effectuer un paiement</button>
+</div>
+
+<div class="card">
+<h3>📜 Historique des paiements</h3>
+<div id="carPaymentList"></div>
+</div>
+
+<h2>Autres dettes</h2>
+<div class="card">
+<h3>💳 Crédit à 0 %</h3>
+<label>Solde actuel ($)</label><input id="zeroBal" type="number" step=".01" inputmode="decimal">
+<label>Paiement mensuel ($)</label><input id="zeroPay" type="number" step=".01" inputmode="decimal">
+<button class="primary" onclick="saveDebt('zero')">Enregistrer</button>
+</div>
+
+<div class="card">
+<h3>🏦 Marge de crédit</h3>
+<label>Solde actuel ($)</label><input id="locBal" type="number" step=".01" inputmode="decimal">
+<label>Taux annuel (%)</label><input id="locRate" type="number" step=".01" inputmode="decimal" value="8.94">
+<label>Paiement mensuel ($)</label><input id="locPay" type="number" step=".01" inputmode="decimal">
+<button class="primary" onclick="saveDebt('loc')">Enregistrer</button>
+</div>
+
+<div class="card">
+<h3>💳 Carte Visa</h3>
+<label>Solde actuel ($)</label><input id="visaBal" type="number" step=".01" inputmode="decimal">
+<label>Taux annuel (%)</label><input id="visaRate" type="number" step=".01" inputmode="decimal" value="19.99">
+<label>Paiement mensuel ($)</label><input id="visaPay" type="number" step=".01" inputmode="decimal">
+<button class="primary" onclick="saveDebt('visa')">Enregistrer</button>
+</div>
+<div id="debtSummary"></div>
+</section>
+
+<section id="history" class="section">
+<h2>Historique</h2>
+<div class="card">
+<div class="row"><input id="search" placeholder="Rechercher..."><select id="filterPay"><option value="">Tous les paiements</option><option value="credit0">Crédit 0 %</option><option value="loc">Marge 8,94 %</option><option value="visa">Visa</option><option value="cheque">Chèque</option><option value="cash">Comptant</option></select></div>
+<div class="row"><input id="fromDate" type="date"><input id="toDate" type="date"></div>
+</div>
+<div id="historyList"></div>
+</section>
+
+<section id="settings" class="section">
+<h2>Données</h2>
+<div class="card">
+<h3>💾 Sauvegarde</h3>
+<p class="small">Les données sont sauvegardées automatiquement sur cet appareil.</p>
+<button class="secondary" style="width:100%" onclick="exportData()">Exporter mes données</button>
+<button class="secondary" style="width:100%" onclick="document.getElementById('file').click()">Importer mes données</button>
+<input id="file" type="file" accept=".json" style="display:none" onchange="importData(event)">
+<button class="danger" style="width:100%" onclick="clearAll()">Effacer toutes les données</button>
+</div>
+<div class="card"><h3>À propos</h3><p class="small">TaxiBudget Pro Québec — outil personnel de suivi. Les calculs d'intérêts sont des estimations et ne remplacent pas les relevés de la banque ou du financement.</p></div>
+</section>
+</div>
+
+<script>
+const CATS=[
+["⛽","Essence"],["🚗","Lavage"],["🔧","Entretien"],["🛞","Pneus"],["🛑","Freins"],["🔋","Batterie"],
+["🛢️","Huile"],["🧰","Réparation"],["📱","Téléphone"],["📡","Internet"],["🧭","GPS"],["📦","Amazon / gadgets"],
+["🔌","Chargeurs / câbles"],["🔋","Booster / accessoires"],["🧹","Produits nettoyage"],["🪑","Accessoires intérieur"],
+["🛡️","Assurance"],["🪪","Immatriculation"],["🔍","Inspection mécanique"],["🧾","Permis / frais taxi"],
+["🅿️","Stationnement"],["🛣️","Péages"],["💰","Redevances"],["🏠","Location"],["📋","Autres"]
+];
+const BILL_CATS=[
+["🛡️","Assurance"],["📱","Téléphone"],["📡","Internet"],["🧭","GPS / Dispatch"],
+["🏠","Location / Garage"],["💰","Redevances"],["🔧","Entretien"],["📋","Autres"]
+];
+const PAY={credit0:"Crédit 0 %",loc:"Marge 8,94 %",visa:"Carte Visa",cheque:"Compte chèque",cash:"Comptant"};
+
+function DEFAULT_DB(){
+    return {
+        expenses: [],
+        bills: [],
+        debts: {
+            zero: {balance: 0, payment: 0},
+            loc: {balance: 0, rate: 8.94, payment: 0},
+            visa: {balance: 0, rate: 19.99, payment: 0}
+        },
+        car: {price: 0, tax: 0, down: 0, fin: 0, note: "", rate: 0, freq: 26, balance: 0, payments: []}
+    };
+}
+
+function normalize(raw){
+    const d = DEFAULT_DB();
+    if (!raw || typeof raw !== "object") return d;
+    if (Array.isArray(raw.expenses)) {
+        d.expenses = raw.expenses.filter(e => e && e.amount != null).map(e => ({
+            id: Number(e.id) || Date.now(),
+            date: String(e.date || "").slice(0, 10),
+            cat: String(e.cat || ""),
+            pay: PAY[e.pay] ? e.pay : "cash",
+            amount: Number(e.amount) || 0,
+            desc: String(e.desc || "")
+        }));
+    }
+    if (Array.isArray(raw.bills)) {
+        d.bills = raw.bills.filter(b => b && b.amount != null).map(b => ({
+            id: Number(b.id) || Date.now(),
+            name: String(b.name || ""),
+            cat: String(b.cat || ""),
+            amount: Number(b.amount) || 0
+        }));
+    }
+    if (raw.debts && typeof raw.debts === "object") {
+        ["zero", "loc", "visa"].forEach(k => {
+            if (raw.debts[k] && typeof raw.debts[k] === "object") {
+                d.debts[k] = Object.assign(d.debts[k], raw.debts[k]);
+            }
+        });
+    }
+    if (raw.car && typeof raw.car === "object") {
+        d.car = Object.assign(d.car, raw.car);
+        if (!d.car.balance && d.car.fin) d.car.balance = d.car.fin;
+        if (!Array.isArray(d.car.payments)) d.car.payments = [];
+        if (!d.car.freq) d.car.freq = 26;
+    }
+    return d;
+}
+
+let db = DEFAULT_DB();
+try {
+    const stored = localStorage.getItem("taxibudget_pro");
+    if (stored) db = normalize(JSON.parse(stored));
+} catch (e) {
+    console.warn("Sauvegarde locale illisible, on repart à neuf.", e);
+    db = DEFAULT_DB();
+}
+
+const money = n => new Intl.NumberFormat("fr-CA", {style: "currency", currency: "CAD"}).format(Number(n) || 0);
+const save = () => { localStorage.setItem("taxibudget_pro", JSON.stringify(db)); renderAll(); };
+function localDate(d = new Date()){ const z = new Date(d.getTime() - d.getTimezoneOffset()*60000); return z.toISOString().slice(0,10); }
+function today(){ return localDate(); }
+
+document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("dDate").value = today();
+    document.getElementById("carPaymentDate").value = today();
+    document.getElementById("dCat").innerHTML = CATS.map(x => `<option>${x[0]} ${x[1]}</option>`).join("");
+    document.getElementById("billCat").innerHTML = BILL_CATS.map(x => `<option>${x[0]} ${x[1]}</option>`).join("");
+    document.getElementById("quickCats").innerHTML = CATS.map(x => `<button class="secondary" onclick="setCat('${x[0]} ${x[1]}')">${x[0]} ${x[1]}</button>`).join("");
+
+    document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+        document.querySelectorAll("nav button").forEach(x => x.classList.remove("active"));
+        b.classList.add("active");
+        document.querySelectorAll(".section").forEach(x => x.classList.remove("active"));
+        document.getElementById(b.dataset.tab).classList.add("active");
+        renderAll();
+    });
+
+    ["search", "filterPay", "fromDate", "toDate"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("input", renderHistory);
+    });
+
+    renderAll();
+});
+
+function setCat(v) { document.getElementById("dCat").value = v; document.getElementById("dAmount").focus(); }
+function newId(){ let id = Date.now(); while (db.expenses.some(e=>e.id===id) || db.bills.some(b=>b.id===id) || (db.car.payments||[]).some(p=>p.id===id)) id++; return id; }
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+// ===== EXPENSES =====
+function addExpense() {
+    let amount = +document.getElementById("dAmount").value;
+    if (!(amount > 0)) return alert("Entre un montant.");
+    db.expenses.push({
+        id: newId(),
+        date: document.getElementById("dDate").value || today(),
+        cat: document.getElementById("dCat").value,
+        pay: document.getElementById("dPay").value,
+        amount,
+        desc: document.getElementById("dDesc").value.trim()
+    });
+    document.getElementById("dAmount").value = "";
+    document.getElementById("dDesc").value = "";
+    save();
+    alert("Dépense ajoutée.");
+}
+function delExpense(id) {
+    if (confirm("Supprimer cette dépense ?")) { db.expenses = db.expenses.filter(e => e.id !== id); save(); }
+}
+
+// ===== BILLS =====
+function addBill() {
+    const name = document.getElementById("billName").value.trim();
+    const amount = +document.getElementById("billAmount").value;
+    if (!name) return alert("Donne un nom à la facture.");
+    if (!(amount > 0)) return alert("Entre un montant mensuel.");
+    db.bills.push({ id: newId(), name, amount, cat: document.getElementById("billCat").value });
+    document.getElementById("billName").value = "";
+    document.getElementById("billAmount").value = "";
+    save();
+    alert("Facture ajoutée.");
+}
+function delBill(id) {
+    if (confirm("Supprimer cette facture ?")) { db.bills = db.bills.filter(b => b.id !== id); save(); }
+}
+function totalBills(){ return db.bills.reduce((s,b) => s + (b.amount||0), 0); }
+function renderBills(){
+    const el = document.getElementById("billList");
+    if (!el) return;
+    el.innerHTML = db.bills.slice().sort((a,b)=>b.amount-a.amount).map(b =>
+        `<div class="item"><div class="itemtop"><b>${esc(b.cat)} ${esc(b.name)}</b><b class="money">${money(b.amount)}</b></div><div class="small">Mensuel</div><button class="danger" onclick="delBill(${b.id})">Supprimer</button></div>`
+    ).join("") || '<div class="empty">Aucune facture enregistrée.</div>';
+    document.getElementById("billTotal").innerHTML = `<div class="card" style="border-color:var(--blue)"><div class="itemtop"><b class="blue">Total factures mensuelles</b><b class="money blue">${money(totalBills())}</b></div><div class="small">Soit ${money(totalBills()*12)} par année</div></div>`;
+}
+
+// ===== DEBTS =====
+function saveDebt(k) {
+    db.debts[k].balance = +(document.getElementById(k === "zero" ? "zeroBal" : k + "Bal").value || 0);
+    db.debts[k].payment = +(document.getElementById(k === "zero" ? "zeroPay" : k + "Pay").value || 0);
+    if (k !== "zero") db.debts[k].rate = +(document.getElementById(k + "Rate").value || 0);
+    save();
+    alert("Dette enregistrée.");
+}
+function interest() {
+    let total = 0;
+    ["loc", "visa"].forEach(k => {
+        let d = db.debts[k];
+        total += (d.balance || 0) * (d.rate || 0) / 100 / 12;
+    });
+    if (db.car.balance && db.car.rate) total += db.car.balance * db.car.rate / 100 / 12;
+    return total;
+}
+
+// ===== CAR FINANCING =====
+function carFreq(){ return db.car.freq || 26; }
+function carTermMonths(){ return 84; }
+function carNumPayments(){ return Math.round(carTermMonths() * carFreq() / 12); }
+function carPeriodicRate(){ return (db.car.rate || 0) / 100 / carFreq(); }
+
+function calcCarPayment(){
+    const P = db.car.fin || 0;
+    const n = carNumPayments();
+    const r = carPeriodicRate();
+    if (P <= 0 || n <= 0) return 0;
+    if (r === 0) return P / n;
+    return P * r / (1 - Math.pow(1 + r, -n));
+}
+
+function carRemainingPayments(){
+    const bal = db.car.balance || 0;
+    const pmt = calcCarPayment();
+    const r = carPeriodicRate();
+    if (bal <= 0 || pmt <= 0) return 0;
+    if (r === 0) return Math.ceil(bal / pmt);
+    const ratio = 1 - (bal * r) / pmt;
+    if (ratio <= 0) return 999;
+    return Math.ceil(-Math.log(ratio) / Math.log(1 + r));
+}
+
+function saveCar() {
+    const newFin = +document.getElementById("carFin").value || 0;
+    const oldFin = db.car.fin || 0;
+    const newFreq = +document.getElementById("carFreq").value || 26;
+    db.car.price = +document.getElementById("carPrice").value || 0;
+    db.car.tax = +document.getElementById("carTax").value || 0;
+    db.car.down = +document.getElementById("carDown").value || 0;
+    db.car.fin = newFin;
+    db.car.rate = +document.getElementById("carRate").value || 0;
+    db.car.freq = newFreq;
+    db.car.note = document.getElementById("carNote").value;
+    if (newFin !== oldFin) {
+        db.car.balance = newFin;
+        if (!confirm("Le solde financé a changé. Réinitialiser l'historique des paiements ? (Annuler = garder les paiements)")) {
+            // keep payments
+        } else {
+            db.car.payments = [];
+        }
+    }
+    if (!db.car.balance && newFin) db.car.balance = newFin;
+    save();
+    alert("Financement enregistré.");
+}
+
+function recordCarPayment(){
+    if (!db.car.balance || db.car.balance <= 0) return alert("Aucun solde à payer. 🎉");
+    const pmt = calcCarPayment();
+    if (pmt <= 0) return alert("Configure d'abord le financement (solde et taux).");
+    const r = carPeriodicRate();
+    const date = document.getElementById("carPaymentDate").value || today();
+
+    const interestIfFull = db.car.balance * r;
+    const totalIfFull = db.car.balance + interestIfFull;
+
+    let interest, principal, amount;
+    if (totalIfFull <= pmt) {
+        interest = interestIfFull;
+        principal = db.car.balance;
+        amount = totalIfFull;
+    } else {
+        interest = interestIfFull;
+        amount = pmt;
+        principal = pmt - interest;
+    }
+
+    db.car.balance = Math.max(0, db.car.balance - principal);
+    db.car.payments.push({ id: newId(), date, amount, interest, principal, balance: db.car.balance });
+    save();
+    alert(`Paiement enregistré : ${money(amount)}\nIntérêts : ${money(interest)}\nCapital : ${money(principal)}\n\nNouveau solde : ${money(db.car.balance)}`);
+}
+
+function delCarPayment(id){
+    if (!confirm("Supprimer ce paiement ? Le solde ne sera PAS recalculé automatiquement.")) return;
+    db.car.payments = db.car.payments.filter(p => p.id !== id);
+    save();
+}
+
+function renderCar(){
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    set("carPrice", db.car.price || "");
+    set("carTax", db.car.tax || "");
+    set("carDown", db.car.down || "");
+    set("carFin", db.car.fin || "");
+    set("carRate", db.car.rate ?? 6.99);
+    set("carNote", db.car.note || "");
+    const freqEl = document.getElementById("carFreq");
+    if (freqEl) freqEl.value = String(db.car.freq || 26);
+
+    const pmt = calcCarPayment();
+    const bal = db.car.balance || 0;
+    const fin = db.car.fin || 0;
+    const n = carNumPayments();
+    const remaining = carRemainingPayments();
+    const progress = fin > 0 ? Math.min(100, ((fin - bal) / fin) * 100) : 0;
+    const freqLabel = carFreq() === 26 ? "aux 2 semaines" : "2× par mois";
+
+    const sum = document.getElementById("carSummary");
+    if (sum) {
+        if (fin <= 0) {
+            sum.innerHTML = '<div class="empty">Remplis les champs ci-dessus pour voir le calcul.</div>';
+        } else {
+            sum.innerHTML = `
+                <div class="item"><div class="itemtop"><b>Paiement ${freqLabel}</b><b class="money green">${money(pmt)}</b></div>
+                <div class="small">${n} paiements sur ${carTermMonths()} mois</div></div>
+                <div class="item"><div class="itemtop"><b>Solde actuel</b><b class="money red">${money(bal)}</b></div>
+                <div class="progress"><div style="width:${progress}%"></div></div>
+                <div class="small">${progress.toFixed(1)} % remboursé · ${remaining} paiement(s) restant(s)</div></div>
+                <div class="item"><div class="itemtop"><b>Total à rembourser</b><b class="money">${money(pmt * n)}</b></div>
+                <div class="small">Intérêts estimés : ${money(pmt * n - fin)}</div></div>
+            `;
+        }
+    }
+
+    const hist = document.getElementById("carPaymentList");
+    if (hist) {
+        const list = (db.car.payments || []).slice().sort((a,b) => b.date.localeCompare(a.date) || b.id - a.id);
+        hist.innerHTML = list.map(p => `
+            <div class="item">
+                <div class="itemtop"><b>${esc(p.date)}</b><b class="money green">${money(p.amount)}</b></div>
+                <div class="small">Intérêts : ${money(p.interest)} · Capital : ${money(p.principal)}</div>
+                <div class="small">Solde après : ${money(p.balance)}</div>
+                <button class="danger" onclick="delCarPayment(${p.id})">Supprimer</button>
+            </div>
+        `).join("") || '<div class="empty">Aucun paiement enregistré.</div>';
+    }
+}
+
+// ===== RENDER =====
+function renderDash() {
+    let ym = today().slice(0, 7);
+    let all = db.expenses.reduce((s, e) => s + e.amount, 0);
+    let month = db.expenses.filter(e => e.date.slice(0, 7) === ym).reduce((s, e) => s + e.amount, 0);
+    let debt = db.debts.zero.balance + db.debts.loc.balance + db.debts.visa.balance + (db.car.balance || 0);
+
+    document.getElementById("mMonth").textContent = money(month);
+    document.getElementById("mAll").textContent = money(all);
+    document.getElementById("mDebt").textContent = money(debt);
+    document.getElementById("mInterest").textContent = money(interest());
+    document.getElementById("mBills").textContent = money(totalBills());
+    const carPmt = calcCarPayment();
+    document.getElementById("mCarPay").textContent = carPmt > 0 ? money(carPmt) : "$0.00";
+
+    document.getElementById("recent").innerHTML = db.expenses.slice().sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id).slice(0, 7).map(expHTML).join("") || '<div class="empty">Aucune dépense.</div>';
+    drawChart();
+}
+
+function expHTML(e) {
+    return `<div class="item"><div class="itemtop"><b>${esc(e.cat)}</b><b class="money">${money(e.amount)}</b></div><div class="small">${esc(e.date)} · ${esc(PAY[e.pay] || e.pay)}${e.desc ? " · " + esc(e.desc) : ""}</div><button class="danger" onclick="delExpense(${e.id})">Supprimer</button></div>`;
+}
+
+function renderHistory() {
+    let q = (document.getElementById("search").value || "").toLowerCase();
+    let p = document.getElementById("filterPay").value;
+    let f = document.getElementById("fromDate").value;
+    let t = document.getElementById("toDate").value;
+    let a = db.expenses.filter(e => (!q || (e.cat + " " + e.desc + " " + (PAY[e.pay] || "")).toLowerCase().includes(q)) && (!p || e.pay === p) && (!f || e.date >= f) && (!t || e.date <= t)).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+    document.getElementById("historyList").innerHTML = a.map(expHTML).join("") || '<div class="empty">Aucune dépense trouvée.</div>';
+}
+
+function renderDebtSummary(){
+    let rows = [["Crédit 0 %", db.debts.zero.balance, 0], ["Marge", db.debts.loc.balance, db.debts.loc.rate], ["Visa", db.debts.visa.balance, db.debts.visa.rate]];
+    document.getElementById("debtSummary").innerHTML = rows.map(r => `<div class="card"><div class="itemtop"><b>${r[0]}</b><b class="money">${money(r[1])}</b></div><div class="small">Taux : ${r[2]} % · Intérêt mensuel estimé : ${money(r[1] * r[2] / 100 / 12)}</div></div>`).join("");
+}
+
+function drawChart() {
+    let c = document.getElementById("chart");
+    if (!c) return;
+    let x = c.getContext("2d"), w = c.width, h = c.height;
+    x.clearRect(0, 0, w, h);
+    let vals = CATS.map(cat => ({name: cat[1], v: db.expenses.filter(e => e.cat === cat[0] + " " + cat[1]).reduce((s, e) => s + e.amount, 0)})).filter(o => o.v > 0).sort((a, b) => b.v - a.v).slice(0, 8);
+    let max = Math.max(1, ...vals.map(o => o.v));
+    x.font = "13px -apple-system";
+    vals.forEach((o, i) => {
+        let y = 18 + i * 25, bw = (w - 260) * o.v / max;
+        x.fillStyle = "#49d17d";
+        x.fillRect(150, y, bw, 15);
+        x.fillStyle = "#d9dde5";
+        x.fillText(o.name.slice(0, 22), 5, y + 12);
+        x.textAlign = "right";
+        x.fillText(money(o.v), w - 5, y + 12);
+        x.textAlign = "left";
+    });
+    if (!vals.length) {
+        x.fillStyle = "#9da4b0";
+        x.fillText("Aucune dépense à afficher", 20, 30);
+    }
+}
+
+function renderAll() {
+    renderDash();
+    renderBills();
+    renderCar();
+    renderDebtSummary();
+    renderHistory();
+    // Also re-render inputs in other tabs
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    set("zeroBal", db.debts.zero.balance || "");
+    set("zeroPay", db.debts.zero.payment || "");
+    set("locBal", db.debts.loc.balance || "");
+    set("locPay", db.debts.loc.payment || "");
+    set("locRate", db.debts.loc.rate ?? 8.94);
+    set("visaBal", db.debts.visa.balance || "");
+    set("visaPay", db.debts.visa.payment || "");
+    set("visaRate", db.debts.visa.rate ?? 19.99);
+}
+
+// ===== IMPORT / EXPORT =====
+function exportData() {
+    let blob = new Blob([JSON.stringify(db, null, 2)], {type: "application/json"}), a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "taxibudget-pro-sauvegarde.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+function importData(ev) {
+    let file = ev.target.files[0];
+    if (!file) return;
+    let r = new FileReader();
+    r.onload = () => {
+        try {
+            let d = JSON.parse(r.result);
+            if (!d || (!Array.isArray(d.expenses) && !d.debts)) throw 0;
+            db = normalize(d);
+            save();
+            alert("Importation réussie.");
+        } catch (e) { alert("Fichier invalide."); }
+        ev.target.value = "";
+    };
+    r.readAsText(file);
+}
+function clearAll() {
+    if (confirm("ATTENTION : effacer toutes les données ?")) {
+        localStorage.removeItem("taxibudget_pro");
+        location.reload();
+    }
+}
+</script>
+</body>
+</html>
